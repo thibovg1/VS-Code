@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Professional Localhost Solitaire</title>
+    <style>
+        :root {
+            --green: #2e7d32;
+            --card-width: 100px;
+            --card-height: 145px;
+            --radius: 8px;
+        }
+
+        body {
+            background-color: var(--green);
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none;
+        }
+
+        /* Layout Grid */
+        #game-container {
+            width: 900px;
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 15px;
+        }
+
+        .slot {
+            width: var(--card-width);
+            height: var(--card-height);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius);
+            position: relative;
+        }
+
+        /* Card Styling */
+        .card {
+            width: var(--card-width);
+            height: var(--card-height);
+            background: white;
+            border-radius: var(--radius);
+            position: absolute;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: transform 0.1s;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .card.red { color: #e53935; }
+        .card.black { color: #212121; }
+
+        .card.back {
+            background: repeating-linear-gradient(45deg, #1565c0, #1565c0 10px, #1e88e5 10px, #1e88e5 20px);
+            color: transparent !important;
+        }
+
+        .card-value { font-weight: bold; font-size: 1.2rem; line-height: 1; }
+        .card-suit { font-size: 2rem; text-align: center; }
+
+        /* Stacking Logic */
+        .tableau-column .card {
+            margin-top: 30px; /* How much of the card underneath shows */
+        }
+
+        .controls { margin: 20px; color: white; }
+        button { padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <span><b>Klondike Solitaire</b></span> | 
+    <button onclick="location.reload()">New Game</button>
+</div>
+
+<div id="game-container">
+    <div id="stock" class="slot" onclick="drawFromStock()"></div>
+    <div id="waste" class="slot"></div>
+    <div></div> <div id="f-0" class="slot foundation" data-suit="♠"></div>
+    <div id="f-1" class="slot foundation" data-suit="♣"></div>
+    <div id="f-2" class="slot foundation" data-suit="♥"></div>
+    <div id="f-3" class="slot foundation" data-suit="♦"></div>
+
+    <div id="col-0" class="slot tableau-column"></div>
+    <div id="col-1" class="slot tableau-column"></div>
+    <div id="col-2" class="slot tableau-column"></div>
+    <div id="col-3" class="slot tableau-column"></div>
+    <div id="col-4" class="slot tableau-column"></div>
+    <div id="col-5" class="slot tableau-column"></div>
+    <div id="col-6" class="slot tableau-column"></div>
+</div>
+
+<script>
+    const suits = ['♠', '♣', '♥', '♦'];
+    const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    let deck = [];
+    let stock = [];
+    let waste = [];
+
+    function initGame() {
+        // 1. Create Deck
+        for (let s of suits) {
+            values.forEach((v, i) => {
+                deck.push({ suit: s, val: v, weight: i + 1, color: (s==='♥'||s==='♦') ? 'red' : 'black' });
+            });
+        }
+
+        // 2. Shuffle
+        deck.sort(() => Math.random() - 0.5);
+
+        // 3. Deal Tableau
+        for (let i = 0; i < 7; i++) {
+            const col = document.getElementById(`col-${i}`);
+            for (let j = 0; j <= i; j++) {
+                const cardData = deck.pop();
+                const cardEl = createCardUI(cardData);
+                if (j < i) cardEl.classList.add('back'); // Face down
+                cardEl.style.top = (j * 25) + "px";
+                col.appendChild(cardEl);
+            }
+        }
+
+        stock = deck;
+        updateStockUI();
+    }
+
+    function createCardUI(data) {
+        const div = document.createElement('div');
+        div.className = `card ${data.color}`;
+        div.dataset.weight = data.weight;
+        div.dataset.suit = data.suit;
+        div.dataset.color = data.color;
+        
+        div.innerHTML = `
+            <div class="card-value">${data.val}</div>
+            <div class="card-suit">${data.suit}</div>
+            <div class="card-value" style="transform: rotate(180deg)">${data.val}</div>
+        `;
+
+        div.onclick = (e) => handleCardClick(div, e);
+        return div;
+    }
+
+    function updateStockUI() {
+        const stockDiv = document.getElementById('stock');
+        stockDiv.innerHTML = stock.length > 0 ? '<div class="card back"></div>' : '';
+    }
+
+    function drawFromStock() {
+        if (stock.length === 0) {
+            stock = waste.reverse();
+            waste = [];
+        } else {
+            waste.push(stock.pop());
+        }
+        renderWaste();
+        updateStockUI();
+    }
+
+    function renderWaste() {
+        const wasteDiv = document.getElementById('waste');
+        wasteDiv.innerHTML = '';
+        if (waste.length > 0) {
+            const card = createCardUI(waste[waste.length - 1]);
+            wasteDiv.appendChild(card);
+        }
+    }
+
+    function handleCardClick(cardEl, event) {
+        event.stopPropagation();
+        
+        // If card is face down, flip it if it's the top one
+        if (cardEl.classList.contains('back')) {
+            if (cardEl === cardEl.parentElement.lastElementChild) {
+                cardEl.classList.remove('back');
+            }
+            return;
+        }
+
+        // Auto-move logic to Foundations (Aces first)
+        const weight = parseInt(cardEl.dataset.weight);
+        const suit = cardEl.dataset.suit;
+
+        for (let i = 0; i < 4; i++) {
+            const f = document.getElementById(`f-${i}`);
+            const topFoundationCard = f.lastElementChild;
+            const targetWeight = topFoundationCard ? parseInt(topFoundationCard.dataset.weight) + 1 : 1;
+
+            if (weight === targetWeight && (topFoundationCard ? topFoundationCard.dataset.suit === suit : true)) {
+                if (weight === 1 || (topFoundationCard && topFoundationCard.dataset.suit === suit)) {
+                    f.appendChild(cardEl);
+                    cardEl.style.top = "0px";
+                    return;
+                }
+            }
+        }
+        
+        alert("Try moving cards to build Ace to King in the top right slots!");
+    }
+
+    initGame();
+</script>
+</body>
+</html>
